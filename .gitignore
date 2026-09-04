@@ -1,0 +1,54 @@
+# Secrets — .env holds a live API key. Never commit it; .env.example documents
+# the shape without the values.
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Databases and their WAL/shared-memory sidecars, plus any ad-hoc backups.
+db/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.backup-*
+
+# Python
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs and scratch output
+*.log
+logs/
+scripts/permutation_run.json

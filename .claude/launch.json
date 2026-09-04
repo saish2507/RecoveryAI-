@@ -1,0 +1,21 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "recoveryai-api",
+      "runtimeExecutable": "venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "-m", "uvicorn", "recoveryai.api.main:app",
+        "--app-dir", "backend", "--host", "127.0.0.1", "--port", "8000"
+      ],
+      "port": 8000
+    },
+    {
+      "name": "recoveryai-console",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "frontend",
+      "port": 5173
+    }
+  ]
+}

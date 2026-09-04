@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Lets the smoke job be run deliberately against the real provider without
+  # waiting for a push.
+  workflow_dispatch:
+
+jobs:
+  # The gate. Key-free, network-free, and the one that blocks a merge.
+  test:
+    name: Tests (offline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check backend/ tests/
+
+      - name: Tests
+        # No GEMINI_API_KEY in this job's environment, deliberately. The suite
+        # is meant to pass without one, and the surest way to keep that true is
+        # to never give it the chance to depend on one.
+        run: pytest tests/ -q
+
+      - name: Migrations match the models
+        run: |
+          alembic upgrade head
+          alembic check
+
+  # Opt-in, and never a merge blocker. This is the only thing that exercises the
+  # wire format between `GeminiProvider` and the real SDK — the gap the offline
+  # suite cannot close, and the top entry in LIMITATIONS.md.
+  llm-smoke:
+    name: LLM smoke (live provider)
+    runs-on: ubuntu-latest
+    needs: test
+    # `continue-on-error`, because a provider outage or an exhausted free-tier
+    # quota is not a defect in this repository. The job reports; it does not
+    # veto. A fork without the secret skips every test inside it and still shows
+    # green, which is the behaviour that keeps CI worth reading.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Report whether a key is available
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "::notice::No GEMINI_API_KEY secret configured — live smoke tests will skip."
+          else
+            echo "::notice::GEMINI_API_KEY present — running one live call per vertical."
+          fi
+
+      - name: Per-vertical smoke test
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        # `-m llm_smoke` is required to select these at all: the default
+        # `addopts` in pyproject.toml deselects them. Without the marker this
+        # step would silently re-run the offline suite and prove nothing.
+        run: pytest tests/ -m llm_smoke -q -rs

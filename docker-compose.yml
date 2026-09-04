@@ -1,0 +1,67 @@
+# Full stack from a clean checkout: `docker compose up --build`, then
+# open http://localhost:8080.
+#
+# The console is served by nginx, which proxies /api and /ws to the backend, so
+# the browser talks to a single origin and CORS is not involved at all. Only the
+# console's port is published — the backend is reachable from the compose network
+# and from the host on 8000 for `curl`/`/docs`, which is what an integrator will
+# actually want to poke at.
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: recoveryai-backend:2.0.0
+    environment:
+      # Every case is decided by the model — there is no policy-table
+      # fallback. An empty key means the agent defers each case instead of
+      # deciding; set GEMINI_API_KEY in a .env file to enable it.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      # gemini-2.5-pro/-flash 404 ("no longer available to new users") for
+      # keys created after their cutoff, despite still appearing in
+      # ListModels. Flash-lite is current default with quota to spare.
+      LLM_MODEL: ${LLM_MODEL:-gemini-3.5-flash-lite}
+      LLM_MAX_RPM: ${LLM_MAX_RPM:-4}
+      LLM_MAX_RPD: ${LLM_MAX_RPD:-90}
+
+      # Flip to `shadow` to pilot against real traffic: every decision is
+      # reasoned and logged, nothing is dispatched.
+      AGENT_MODE: ${AGENT_MODE:-live}
+      ACTION_EXECUTOR: ${ACTION_EXECUTOR:-simulated}
+      ACTION_WEBHOOK_URL: ${ACTION_WEBHOOK_URL:-}
+
+      FOLLOWUP_DELAY_SECONDS: ${FOLLOWUP_DELAY_SECONDS:-75}
+      SIMULATOR_ENABLED: ${SIMULATOR_ENABLED:-true}
+      SIMULATOR_INTERVAL_SECONDS: ${SIMULATOR_INTERVAL_SECONDS:-6}
+
+      API_KEYS: ${API_KEYS:-}
+      WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET:-}
+      # nginx proxies same-origin, so this only matters if you point a browser
+      # at the backend port directly.
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+
+      DATABASE_URL: sqlite:////app/db/recoveryai.db
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_JSON: ${LOG_JSON:-true}
+    ports:
+      - "8000:8000"
+    volumes:
+      # Cases and the LLM daily budget must outlive the container.
+      - recoveryai-db:/app/db
+    restart: unless-stopped
+
+  console:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: recoveryai-console:2.0.0
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  recoveryai-db:
